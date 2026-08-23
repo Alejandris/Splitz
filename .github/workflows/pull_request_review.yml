@@ -1,0 +1,32 @@
+name: Run Tests on Pull Request
+
+on:
+  pull_request:
+    branches:
+      - staging
+
+env:
+  AZURE_MONITOR_CONNECTION_STRING: ${{ secrets.AZURE_MONITOR_KEY }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build the project
+        run: go build -v ./cmd/api
+
+      - name: Run tests
+        run: go test -v ./... -cover
