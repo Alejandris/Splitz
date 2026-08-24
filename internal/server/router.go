@@ -12,5 +12,6 @@ func NewRouter() *chi.Mux {
 	r.Get("/health", handlers.HealthCheck)
 	r.Post("/api/v1/salary", handlers.AddSalary)
 	r.Post("/api/v1/budget/calculate", handlers.CalculateBudget)
+	r.Post("/api/v1/budget/custom", handlers.CalculateCustomBudget)
 	return r
 }
