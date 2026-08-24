@@ -1,0 +1,25 @@
+# Ignorar git y CI/CD
+.git
+.github
+.gitignore
+
+# Ignorar binarios locales y ejecutables
+*.exe
+api.exe
+bin/
+dist/
+
+# Ignorar documentación
+README.md
+
+# Ignorar archivos temporales y logs
+*.log
+.gemini/
+.idea/
+.vscode/
+scratch/
+
+# Ignorar archivos de pruebas en producción (opcional pero reduce el contexto)
+*_test.go
+test/
+
