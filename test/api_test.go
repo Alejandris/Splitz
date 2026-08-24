@@ -3,6 +3,7 @@ package test
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"splitz/internal/models"
@@ -10,6 +11,15 @@ import (
 	"splitz/internal/service"
 	"testing"
 )
+
+const floatTolerance = 1e-9
+
+func assertFloatApprox(t *testing.T, got float64, want float64, message string) {
+	t.Helper()
+	if math.Abs(got-want) > floatTolerance {
+		t.Fatalf("%s: se esperaba %.10f, pero se obtuvo %.10f", message, want, got)
+	}
+}
 
 // setupServer configura el router de prueba equivalente a tu WebApplicationFactory en .NET
 func setupServer() http.Handler {
@@ -62,18 +72,10 @@ func TestCalculateBudgetByMethod_Enfoque(t *testing.T) {
 		t.Fatalf("No se esperaba error: %v", err)
 	}
 
-	if result.Needs != 1500 {
-		t.Fatalf("Se esperaba needs=1500, pero se obtuvo %v", result.Needs)
-	}
-	if result.Debt != 900 {
-		t.Fatalf("Se esperaba debt=900, pero se obtuvo %v", result.Debt)
-	}
-	if result.Savings != 300 {
-		t.Fatalf("Se esperaba savings=300, pero se obtuvo %v", result.Savings)
-	}
-	if result.Desires != 300 {
-		t.Fatalf("Se esperaba desires=300, pero se obtuvo %v", result.Desires)
-	}
+	assertFloatApprox(t, result.Needs, 1500, "needs")
+	assertFloatApprox(t, result.Debt, 900, "debt")
+	assertFloatApprox(t, result.Savings, 300, "savings")
+	assertFloatApprox(t, result.Desires, 300, "desires")
 }
 
 // TestCalculateBudgetByMethod_AllProfiles valida las tres metodologías fijas.
@@ -99,21 +101,11 @@ func TestCalculateBudgetByMethod_AllProfiles(t *testing.T) {
 			t.Fatalf("%s: no se esperaba error: %v", tc.name, err)
 		}
 
-		if result.Needs != tc.needs {
-			t.Fatalf("%s: esperaba needs=%v, pero se obtuvo %v", tc.name, tc.needs, result.Needs)
-		}
-		if result.Debt != tc.debt {
-			t.Fatalf("%s: esperaba debt=%v, pero se obtuvo %v", tc.name, tc.debt, result.Debt)
-		}
-		if result.Savings != tc.savings {
-			t.Fatalf("%s: esperaba savings=%v, pero se obtuvo %v", tc.name, tc.savings, result.Savings)
-		}
-		if result.Desires != tc.desires {
-			t.Fatalf("%s: esperaba desires=%v, pero se obtuvo %v", tc.name, tc.desires, result.Desires)
-		}
-		if result.Lifestyle != tc.lifestyle {
-			t.Fatalf("%s: esperaba lifestyle=%v, pero se obtuvo %v", tc.name, tc.lifestyle, result.Lifestyle)
-		}
+		assertFloatApprox(t, result.Needs, tc.needs, tc.name+" needs")
+		assertFloatApprox(t, result.Debt, tc.debt, tc.name+" debt")
+		assertFloatApprox(t, result.Savings, tc.savings, tc.name+" savings")
+		assertFloatApprox(t, result.Desires, tc.desires, tc.name+" desires")
+		assertFloatApprox(t, result.Lifestyle, tc.lifestyle, tc.name+" lifestyle")
 	}
 }
 
@@ -140,9 +132,7 @@ func TestCalculateBudgetEndpoint_Success(t *testing.T) {
 	if response["method"] != float64(1) {
 		t.Errorf("Se esperaba method=1, pero se obtuvo %v", response["method"])
 	}
-	if response["needs"] != float64(1500) {
-		t.Errorf("Se esperaba needs=1500, pero se obtuvo %v", response["needs"])
-	}
+	assertFloatApprox(t, response["needs"].(float64), 1500, "endpoint needs")
 }
 
 // TestCalculateBudgetEndpoint_InvalidMethod valida opción no permitida.
@@ -215,15 +205,9 @@ func TestCalculateCustomBudgetEndpoint_Success(t *testing.T) {
 		t.Fatalf("Error al parsear respuesta JSON: %v", err)
 	}
 
-	if response["salary"] != float64(4000) {
-		t.Errorf("Se esperaba salary=4000, pero se obtuvo %v", response["salary"])
-	}
-	if response["total_percent"] != float64(100) {
-		t.Errorf("Se esperaba total_percent=100, pero se obtuvo %v", response["total_percent"])
-	}
-	if response["needs"] != float64(1600) {
-		t.Errorf("Se esperaba needs=1600, pero se obtuvo %v", response["needs"])
-	}
+	assertFloatApprox(t, response["salary"].(float64), 4000, "custom salary")
+	assertFloatApprox(t, response["total_percent"].(float64), 100, "custom total")
+	assertFloatApprox(t, response["needs"].(float64), 1600, "custom needs")
 }
 
 // TestAddSalaryEndpoint_Success prueba el ingreso de salario neto.
@@ -246,12 +230,8 @@ func TestAddSalaryEndpoint_Success(t *testing.T) {
 		t.Fatalf("Error al parsear respuesta JSON: %v", err)
 	}
 
-	if response["net_salary"] != float64(2500) {
-		t.Errorf("Se esperaba net_salary 2500, pero se obtuvo %v", response["net_salary"])
-	}
-	if response["salary"] != float64(2500) {
-		t.Errorf("Se esperaba salary 2500, pero se obtuvo %v", response["salary"])
-	}
+	assertFloatApprox(t, response["net_salary"].(float64), 2500, "net_salary")
+	assertFloatApprox(t, response["salary"].(float64), 2500, "salary")
 
 	if response["ready_for_processing"] != true {
 		t.Errorf("Se esperaba ready_for_processing=true, pero se obtuvo %v", response["ready_for_processing"])
