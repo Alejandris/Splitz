@@ -7,7 +7,7 @@ import (
 	"splitz/internal/models"
 )
 
-// AddSalary registra salario neto y devuelve salida lista para el siguiente endpoint.
+// AddSalary registra salario neto y lo devuelve con la clave salary para el siguiente endpoint.
 func AddSalary(w http.ResponseWriter, r *http.Request) {
 	var request models.AddSalaryRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -22,6 +22,7 @@ func AddSalary(w http.ResponseWriter, r *http.Request) {
 
 	response := models.AddSalaryResponse{
 		NetSalary:          request.NetSalary,
+		Salary:             request.NetSalary,
 		ReadyForProcessing: true,
 	}
 

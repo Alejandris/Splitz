@@ -4,17 +4,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
-	"splitz/internal/handlers"
-
-	"github.com/go-chi/chi/v5"
+	"splitz/internal/server"
 )
 
 func main() {
-	r := chi.NewRouter()
-	r.Get("/health", handlers.HealthCheck)
-	r.Post("/api/v1/salary", handlers.AddSalary)
-	r.Post("/api/v1/budget/calculate", handlers.CalculateBudget)
+	r := server.NewRouter()
 
 	addr := ":8080"
 	if port := os.Getenv("PORT"); port != "" {
@@ -22,7 +18,16 @@ func main() {
 	}
 
 	log.Printf("API listening on %s", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

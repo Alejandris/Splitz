@@ -5,20 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"splitz/internal/server"
 	"testing"
-
-	"splitz/internal/handlers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 // setupServer configura el router de prueba equivalente a tu WebApplicationFactory en .NET
-func setupServer() *chi.Mux {
-	r := chi.NewRouter()
-	r.Get("/health", handlers.HealthCheck)
-	r.Post("/api/v1/salary", handlers.AddSalary)
-	r.Post("/api/v1/budget/calculate", handlers.CalculateBudget)
-	return r
+func setupServer() http.Handler {
+	return server.NewRouter()
 }
 
 // TestHealthCheckEndpoint prueba el estado de salud de la API (US-03)
@@ -82,6 +75,9 @@ func TestAddSalaryEndpoint_Success(t *testing.T) {
 
 	if response["net_salary"] != float64(2500) {
 		t.Errorf("Se esperaba net_salary 2500, pero se obtuvo %v", response["net_salary"])
+	}
+	if response["salary"] != float64(2500) {
+		t.Errorf("Se esperaba salary 2500, pero se obtuvo %v", response["salary"])
 	}
 
 	if response["ready_for_processing"] != true {
