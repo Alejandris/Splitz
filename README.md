@@ -37,6 +37,14 @@ El código sigue una arquitectura limpia adaptada para proyectos de Go:
 │       └── budget_service.go       # Lógica de negocio y algoritmos de distribución financiera.
 ├── test/
 │   └── api_test.go                 # Pruebas unitarias y de integración de la API.
+├── frontend/                       # Aplicación web React + TypeScript.
+│   ├── src/
+│   │   ├── app/                    # Composición, layout y estilos globales.
+│   │   ├── features/               # Módulos por dominio (presupuesto, salario, etc.).
+│   │   ├── pages/                  # Pantallas compuestas por features.
+│   │   └── shared/                  # Cliente HTTP y utilidades reutilizables.
+│   ├── package.json
+│   └── vite.config.ts
 ├── go.mod                          # Definición del módulo Go y dependencias.
 ├── go.sum                          # Sumas de verificación de dependencias.
 └── README.md                       # Documentación principal del proyecto.
@@ -160,6 +168,28 @@ Para ejecutar todas las pruebas de tu proyecto (ideal para el pipeline de CI/CD)
 ```bash
 go test ./... -v
 ```
+
+### Frontend
+
+El frontend usa React, TypeScript y Vite. La organización separa la composición (`app`), las pantallas (`pages`), la lógica por dominio (`features`) y las utilidades compartidas (`shared`).
+
+```bash
+# Terminal 1, desde la raíz
+go run ./cmd/api
+
+# Terminal 2
+cd frontend
+npm install
+npm run dev
+```
+
+La aplicación queda disponible en `http://localhost:5173`. Vite redirige `/api` a `http://localhost:8080` durante el desarrollo. Para otro entorno, copia `frontend/.env.example` a `frontend/.env` y define `VITE_API_URL`.
+
+### Estrategia móvil con Gomobile
+
+Gomobile no empaqueta directamente una interfaz React en un APK: compila paquetes Go para ser consumidos desde Android/iOS. Por eso el frontend se mantiene como React web y, en una siguiente etapa, se añadirá un contenedor móvil WebView con un puente hacia un paquete Go generado con Gomobile. La lógica de cálculo seguirá viviendo en Go y podrá reutilizarse desde la API y el APK, sin duplicarla en código nativo.
+
+La separación actual (`frontend/` + API Go) deja ese puente aislado y evita acoplar el diseño de las páginas a una tecnología móvil específica.
 
 ---
 
