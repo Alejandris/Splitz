@@ -1,21 +1,39 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
+	"splitz/internal/auth"
+	"splitz/internal/config"
+	"splitz/internal/database"
 	"splitz/internal/server"
 )
 
 func main() {
+	ctx := context.Background()
+	appConfig, err := config.Load()
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
+
+	dbPool, err := database.NewPostgresPool(ctx, appConfig.DatabaseURL)
+	if err != nil {
+		log.Fatalf("database connection error: %v", err)
+	}
+	defer dbPool.Close()
+
+	firebaseAuth, err := auth.NewFirebaseAuth(ctx, appConfig.FirebaseProjectID, appConfig.FirebaseCredentialsFile)
+	if err != nil {
+		log.Fatalf("Firebase connection error: %v", err)
+	}
+	_ = firebaseAuth
+
 	r := server.NewRouter()
 
-	addr := ":8080"
-	if port := os.Getenv("PORT"); port != "" {
-		addr = ":" + port
-	}
+	addr := ":" + appConfig.Port
 
 	log.Printf("API listening on %s", addr)
 	srv := &http.Server{

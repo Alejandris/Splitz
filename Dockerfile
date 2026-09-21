@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -18,8 +18,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o splitz-api ./cmd/api/m
 # Production stage
 FROM alpine:3.20
 
-# Instalar certificados CA y curl para el healthcheck / diagnóstico
-RUN apk --no-cache add curl ca-certificates
+# Instalar certificados CA para Neon y Firebase
+RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
@@ -31,6 +31,8 @@ EXPOSE 8080
 
 # Variable de entorno de puerto por defecto
 ENV PORT=8080
+
+USER nobody
 
 # Comando de ejecución
 ENTRYPOINT ["./splitz-api"]

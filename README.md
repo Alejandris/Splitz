@@ -185,6 +185,31 @@ npm run dev
 
 La aplicación queda disponible en `http://localhost:5173`. Vite redirige `/api` a `http://localhost:8080` durante el desarrollo. Para otro entorno, copia `frontend/.env.example` a `frontend/.env` y define `VITE_API_URL`.
 
+### Docker y ambientes
+
+El backend y el frontend se ejecutan como contenedores separados. El frontend usa Nginx y reenvía las solicitudes `/api` al servicio `backend` dentro de la red de Docker.
+
+Para staging:
+
+```powershell
+Copy-Item .env.staging.example .env.staging
+New-Item -ItemType Directory -Force secrets
+# Coloca secrets/firebase-service-account.json
+docker compose --env-file .env.staging -f docker-compose.staging.yml up --build
+```
+
+Staging queda disponible en `http://localhost:5174`.
+
+Para producción local o un servidor de despliegue:
+
+```powershell
+Copy-Item .env.production.example .env.production
+# Completa .env.production y coloca secrets/firebase-service-account.json
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
+```
+
+Producción queda disponible en `http://localhost`. Los archivos `.env.staging`, `.env.production` y el JSON de Firebase no deben versionarse. En CI/CD, `DOCKERHUB_USERNAME` y `DOCKERHUB_TOKEN` deben configurarse como secretos de GitHub.
+
 ### Estrategia móvil con Gomobile
 
 Gomobile no empaqueta directamente una interfaz React en un APK: compila paquetes Go para ser consumidos desde Android/iOS. Por eso el frontend se mantiene como React web y, en una siguiente etapa, se añadirá un contenedor móvil WebView con un puente hacia un paquete Go generado con Gomobile. La lógica de cálculo seguirá viviendo en Go y podrá reutilizarse desde la API y el APK, sin duplicarla en código nativo.
