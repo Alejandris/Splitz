@@ -1,4 +1,15 @@
-# Ignorar git y CI/CD
+.git
+.github
+.env
+.env.*
+!.env.example
+secrets
+frontend/node_modules
+frontend/dist
+**/*_test.go
+README.md
+design.md
+flow_rules.md# Ignorar git y CI/CD
 .git
 .github
 .gitignore

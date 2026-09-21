@@ -1,19 +1,59 @@
-name: Build and Push to Docker Hub
+name: Build and Push Docker Images
 
 on:
   push:
-    branches: [ "staging" ]
+    branches:
+      - staging
+      - production
+  workflow_dispatch:
+
+env:
+  REGISTRY_NAMESPACE: alejandris/splitz
 
 jobs:
-  build-and-push:
-    name: Build & Push Docker Image
+  test:
+    name: Validate backend and frontend
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test backend
+        run: go test ./...
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+
+  build-and-push:
+    name: Build and push ${{ matrix.image }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: backend
+            context: .
+            file: ./Dockerfile
+          - image: frontend
+            context: ./frontend
+            file: ./frontend/Dockerfile
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -24,16 +64,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
+      - name: Build and push image
+        uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
           tags: |
-            alejandris/splitz:latest
-            alejandris/splitz:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-          
+            ${{ env.REGISTRY_NAMESPACE }}-${{ matrix.image }}:${{ github.ref_name }}
+            ${{ env.REGISTRY_NAMESPACE }}-${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
