@@ -29,9 +29,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Firebase connection error: %v", err)
 	}
-	_ = firebaseAuth
 
-	r := server.NewRouter()
+	r := server.NewRouter(server.WithDependencies(dbPool, firebaseAuth))
 
 	addr := ":" + appConfig.Port
 
