@@ -150,7 +150,7 @@ Permite especificar porcentajes exactos para cada rubro. La suma de los porcenta
 ## 🛠️ Ejecución Local y Pruebas
 
 ### Prerrequisitos
-* Tener instalado [Go 1.23](https://go.dev/dl/) o superior.
+* Tener instalado [Go 1.25](https://go.dev/dl/) o superior.
 
 ### Levantar el Servidor
 ```bash
@@ -183,7 +183,61 @@ npm install
 npm run dev
 ```
 
-La aplicación queda disponible en `http://localhost:5173`. Vite redirige `/api` a `http://localhost:8080` durante el desarrollo. Para otro entorno, copia `frontend/.env.example` a `frontend/.env` y define `VITE_API_URL`.
+La aplicación local queda disponible en `http://localhost:5173`. Vite redirige `/api` a `http://localhost:8080` durante el desarrollo. El servidor Vite usa `strictPort`, por lo que no cambia silenciosamente a otro puerto si `5173` está ocupado. Para otro entorno, copia `frontend/.env.example` a `frontend/.env` y define `VITE_API_URL`.
+
+### Autenticación Firebase
+
+La autenticación implementada incluye:
+
+- Registro con correo, contraseña y nombre visible.
+- Inicio de sesión con correo y contraseña.
+- Inicio de sesión con Google.
+- Persistencia de sesión en Firebase.
+- Cierre de sesión.
+- Sincronización del perfil en PostgreSQL.
+- Protección de las rutas financieras mediante Firebase ID Token.
+
+Habilita Email/Password y Google en Firebase Console. Configura `frontend/.env` con los valores de la aplicación web:
+
+```env
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=splitz-b354c.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=splitz-b354c
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+
+La cuenta de servicio de Firebase Admin solo se configura en el backend mediante `FIREBASE_CREDENTIALS_FILE`. Nunca debe exponerse en el frontend ni versionarse.
+
+El esquema de PostgreSQL definido en `flow_rules.md` ya debe estar creado, incluida la tabla `users` con esta estructura:
+
+```text
+id            UUID PRIMARY KEY DEFAULT uuid_generate_v4()
+firebase_uid  VARCHAR(128) UNIQUE NOT NULL
+email         VARCHAR(255) UNIQUE NOT NULL
+name          VARCHAR(100)
+created_at    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+```
+
+No se ejecutan migraciones desde la aplicación. Después de autenticar Firebase, el frontend llama a `GET /api/v1/auth/me` con `Authorization: Bearer <firebase-id-token>`. El backend valida el token y sincroniza el usuario con `users.firebase_uid` usando un upsert; si el usuario no existe lo crea y si existe actualiza correo y nombre.
+
+Respuesta exitosa esperada:
+
+```json
+{
+  "id": "uuid-interno",
+  "firebase_uid": "firebase-uid",
+  "email": "usuario@example.com",
+  "name": "Usuario"
+}
+```
+
+Las rutas financieras también requieren `Authorization: Bearer <firebase-id-token>`. `/health` permanece público.
+
+Si el navegador recibe `500` en `/api/v1/auth/me`, revisa la terminal del backend: Firebase ya fue validado y el error está en la conexión PostgreSQL, permisos o coincidencia de la tabla `users`.
+
+Para Docker, las variables `VITE_FIREBASE_*` deben estar en el archivo `.env.staging` o `.env` usado por Compose, porque Vite las incorpora durante el build de la imagen. Para GitHub Actions, configura las mismas claves como Repository Variables (`Settings > Secrets and variables > Actions > Variables`). La cuenta de servicio Admin nunca se pasa al frontend: solo se monta en el backend mediante `FIREBASE_CREDENTIALS_FILE`.
 
 ### Docker y ambientes
 
@@ -198,7 +252,7 @@ New-Item -ItemType Directory -Force secrets
 docker compose --env-file .env.staging -f docker-compose.staging.yml up --build
 ```
 
-Staging queda disponible en `http://localhost:5174`.
+Staging queda disponible en `http://localhost:5174`; su API queda publicada en `http://localhost:8080` para permitir también pruebas desde Vite local. El desarrollo con Vite usa `http://localhost:5173` y el mismo backend en `http://localhost:8080`.
 
 Para producción local o un servidor de despliegue:
 

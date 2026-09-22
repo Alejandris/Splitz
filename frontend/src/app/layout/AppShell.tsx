@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { AppRoute } from '../App'
+import { useAuth } from '../../features/auth/AuthProvider'
 
 type AppShellProps = {
   activeRoute: AppRoute
@@ -8,6 +9,9 @@ type AppShellProps = {
 }
 
 export function AppShell({ activeRoute, onNavigate, children }: AppShellProps) {
+  const { profile, user, signOutUser } = useAuth()
+  const profileName = profile?.name || user?.displayName || user?.email || 'Usuario'
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -26,7 +30,7 @@ export function AppShell({ activeRoute, onNavigate, children }: AppShellProps) {
       <main className="main-content">
         <header className="topbar">
           <span className="eyebrow">CONTROL FINANCIERO</span>
-          <div className="avatar">A</div>
+          <div className="profile-menu"><div className="avatar">{profileName.charAt(0).toUpperCase()}</div><span>{profileName}</span><button className="logout-button" onClick={() => void signOutUser()}>Salir</button></div>
         </header>
         {children}
       </main>

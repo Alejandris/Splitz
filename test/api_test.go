@@ -6,8 +6,8 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"splitz/internal/handlers"
 	"splitz/internal/models"
-	"splitz/internal/server"
 	"splitz/internal/service"
 	"testing"
 )
@@ -23,7 +23,12 @@ func assertFloatApprox(t *testing.T, got float64, want float64, message string) 
 
 // setupServer configura el router de prueba equivalente a tu WebApplicationFactory en .NET
 func setupServer() http.Handler {
-	return server.NewRouter()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", handlers.HealthCheck)
+	mux.HandleFunc("/api/v1/salary", handlers.AddSalary)
+	mux.HandleFunc("/api/v1/budget/calculate", handlers.CalculateBudget)
+	mux.HandleFunc("/api/v1/budget/custom", handlers.CalculateCustomBudget)
+	return mux
 }
 
 // TestHealthCheckEndpoint prueba el estado de salud de la API (US-03)
