@@ -10,7 +10,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./secrets/splitz-b354c-firebase-adminsdk-fbsvc-2896b8bd44.json:/run/secrets/firebase-service-account.json:ro
+      - ./secrets/splitz-b354c-firebase-adminsdk-fbsvc-e3746d93a1.json:/run/secrets/firebase-service-account.json:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8080/health"]
       interval: 10s

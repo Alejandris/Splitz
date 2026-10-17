@@ -9,7 +9,7 @@ services:
     environment:
       PORT: 8080
     volumes:
-      - ./secrets/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
+      - ./secrets/splitz-b354c-firebase-adminsdk-fbsvc-e3746d93a1.json:/run/secrets/firebase-service-account.json:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8080/health"]
