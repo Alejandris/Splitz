@@ -1,6 +1,6 @@
 # Documentación de reglas, datos y flujo de Splitz
 
-> Documento de referencia para la futura conexión con Neon PostgreSQL y Firebase Authentication. En esta etapa solo se documenta el contexto; no se ejecutan comandos de infraestructura ni se modifica la lógica de la aplicación.
+> Documento de referencia para la conexión con Neon PostgreSQL y Firebase Authentication.
 
 ## 1. Visión general
 
@@ -35,7 +35,7 @@ $$
 \left(\frac{\sum \text{Gastos Fijos Activos}}{\text{Sueldo Base Total}}\right) \times 100
 $$
 
-- Si el porcentaje supera `50.00%`, se activa `exceeds_fifty_percent` en el contrato de respuesta del resumen.
+- Si el porcentaje supera `50.00%`, la API calcula `exceeds_fifty_percent` en el contrato de respuesta del resumen; no se persiste porque la tabla existente no tiene esa columna.
 - El excedente disponible se calcula como:
 
 $$
@@ -228,9 +228,9 @@ CREATE TABLE period_closures (
 - Añadir índices por `user_id`, `period_id`, `firebase_uid` y fechas de transacción.
 - Definir si `categories` es global, por usuario o una combinación de categorías del sistema y personalizadas.
 - Añadir restricciones que impidan relacionar un registro de un usuario con una cuenta de otro usuario.
-- Definir precisión y redondeo monetario para cada cálculo.
-- Validar si `exceeds_fifty_percent` se persiste o se calcula únicamente en la respuesta.
-- Versionar el DDL mediante migraciones antes de conectar producción.
+- Los importes se almacenan con `NUMERIC(12,2)` y se redondean a dos decimales con redondeo comercial.
+- `exceeds_fifty_percent` se calcula únicamente en la respuesta.
+- El esquema de períodos y gastos fijos preexiste en la base de datos. La migración aprobada es `migrations/002_seed_categories_and_methods.sql`, limitada a categorías y métodos globales.
 
 ## 4. Autenticación con Firebase
 

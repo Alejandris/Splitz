@@ -35,6 +35,9 @@ El código sigue una arquitectura limpia adaptada para proyectos de Go:
 │   │   └── router.go               # Configuración de rutas y enrutador HTTP utilizando go-chi/v5.
 │   └── service/
 │       └── budget_service.go       # Lógica de negocio y algoritmos de distribución financiera.
+├── migrations/
+│   ├── 002_seed_categories_and_methods.sql  # Columnas y datos iniciales de categorías y métodos.
+│   └── 003_period_currency_and_dates.sql   # Moneda y fechas de los períodos.
 ├── test/
 │   └── api_test.go                 # Pruebas unitarias y de integración de la API.
 ├── frontend/                       # Aplicación web React + TypeScript.
@@ -148,6 +151,34 @@ Permite especificar porcentajes exactos para cada rubro. La suma de los porcenta
 ---
 
 ## 🛠️ Ejecución Local y Pruebas
+
+### Períodos y gastos fijos
+
+Las operaciones financieras protegidas por Firebase incluyen:
+
+* `POST /api/v1/periods`: crea el período del usuario. Solo se permite un período
+  por usuario, año y mes; si ya existe responde `409 Conflict`. El cuerpo
+  acepta `year`, `month`, `start_date`, `end_date` (formato `YYYY-MM-DD`) y
+  `currency_code` (`MXN`, `COP`, `USD` o `EUR`). Las fechas son obligatorias
+  en conjunto; si ambas se omiten, el backend calcula el primer y último día
+  del mes. La respuesta incluye `start_date`, `end_date` y `currency_code`.
+* `GET /api/v1/periods/{periodID}`: consulta un período únicamente si pertenece al usuario autenticado.
+* `PATCH /api/v1/periods/{periodID}/close`: cierra manualmente un período
+  abierto del usuario autenticado. Un período cerrado no se puede cerrar de nuevo.
+* `GET /api/v1/periods`: lista el historial de períodos del usuario autenticado,
+  incluyendo el resumen financiero disponible y el estado abierto/cerrado.
+* `POST /api/v1/periods/{periodID}/financial-summary`: registra el ingreso y calcula el porcentaje de gastos fijos.
+* `POST /api/v1/fixed-expenses`: crea un gasto fijo del usuario.
+* `GET /api/v1/fixed-expenses`: lista únicamente los gastos fijos del usuario autenticado.
+* `GET /api/v1/fixed-expenses/history`: consulta snapshots de gastos de períodos anteriores.
+* `POST /api/v1/periods/{periodID}/financial-summary/preview`: calcula una distribución sin guardarla.
+
+Los importes se redondean a dos decimales con redondeo comercial. El esquema
+existente ya contiene las tablas de períodos y gastos fijos; la migración
+[002_seed_categories_and_methods.sql](./migrations/002_seed_categories_and_methods.sql)
+solo agrega propiedad y estado a las categorías y carga los datos globales iniciales.
+La migración `003_period_currency_and_dates.sql` agrega moneda y fechas de inicio/fin
+al usuario y al período, conservando los períodos existentes mediante una migración de datos.
 
 ### Prerrequisitos
 * Tener instalado [Go 1.25](https://go.dev/dl/) o superior.
@@ -278,7 +309,8 @@ Para cumplir con los requerimientos de la asignatura de **DevOps**, el repositor
 
 ```mermaid
 flowchart TD
-    1[1. Planificar] --> 2[2. Codificar]
+    1[1. Planificar] --> 
+    2[2. Codificar]
     2 --> 3[3. Construir]
     3 --> 4[4. Probar]
     4 --> 5[5. Liberar]

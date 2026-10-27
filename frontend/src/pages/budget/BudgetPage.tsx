@@ -1,48 +1,38 @@
-import { useState } from 'react'
-import { calculateBudget } from '../../features/budget/budget.api'
-import type { BudgetMethod, BudgetResponse } from '../../features/budget/budget.types'
+import { useEffect, useState } from 'react'
+import { closePeriod, listPeriods } from '../../features/periods/period.api'
+import type { PeriodOverview } from '../../features/periods/period.types'
 
-const methods: Array<{ id: BudgetMethod; name: string; description: string }> = [
-  { id: 1, name: 'Modo enfoque', description: 'Prioriza necesidades y deudas.' },
-  { id: 2, name: 'Modo inversionista', description: 'Acelera ahorro e inversión.' },
-  { id: 3, name: 'Modo disfrute', description: 'Equilibra vida y objetivos.' },
-]
+type BudgetPageProps = { onOpenPeriod: () => void }
 
-const categories = [
-  ['needs', 'Necesidades', 'var(--teal)'], ['debt', 'Deudas', 'var(--orange)'], ['savings', 'Ahorro', 'var(--blue)'],
-  ['desires', 'Deseos', 'var(--pink)'], ['lifestyle', 'Estilo de vida', 'var(--purple)'], ['investment', 'Inversión', 'var(--green)'],
-] as const
-
-export function BudgetPage() {
-  const [salary, setSalary] = useState('3000')
-  const [method, setMethod] = useState<BudgetMethod>(1)
-  const [result, setResult] = useState<BudgetResponse | null>(null)
+export function BudgetPage({ onOpenPeriod }: BudgetPageProps) {
+  const [periods, setPeriods] = useState<PeriodOverview[]>([])
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    setError('')
-    setLoading(true)
+  useEffect(() => {
+    listPeriods().then(setPeriods).catch(() => setError('No se pudieron cargar los períodos registrados'))
+  }, [])
+
+  function formatMoney(value: number, currency: string) {
+    return value.toLocaleString('es-MX', { style: 'currency', currency, minimumFractionDigits: 2 })
+  }
+
+  async function handleClose(periodId: string) {
+    if (!window.confirm('¿Quieres cerrar este período? Después no podrás modificarlo.')) return
     try {
-      setResult(await calculateBudget({ salary: Number(salary), method }))
+      const closed = await closePeriod(periodId)
+      setPeriods((current) => current.map((period) => period.id === closed.id ? { ...period, is_closed: true } : period))
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo calcular el presupuesto')
-    } finally {
-      setLoading(false)
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo cerrar el período')
     }
   }
 
   return <section className="page budget-page">
-    <div className="page-heading"><div><p className="eyebrow accent">NUEVO PRESUPUESTO</p><h1>Haz que cada peso<br /><em>tenga un propósito.</em></h1></div><span className="step-count">01 <span>/ 01</span></span></div>
-    <form className="budget-form" onSubmit={handleSubmit}>
-      <label className="field-label" htmlFor="salary">¿Cuál es tu ingreso neto mensual?</label>
-      <div className="salary-input"><span>$</span><input id="salary" type="number" min="1" step="0.01" value={salary} onChange={(event) => setSalary(event.target.value)} required /><span className="currency">MXN</span></div>
-      <div className="field-label method-label">Elige una metodología</div>
-      <div className="method-list">{methods.map((item) => <button type="button" key={item.id} className={`method-card ${method === item.id ? 'selected' : ''}`} onClick={() => setMethod(item.id)}><span className="method-number">0{item.id}</span><span><strong>{item.name}</strong><small>{item.description}</small></span><span className="radio">{method === item.id ? '✓' : ''}</span></button>)}</div>
-      <button className="primary-button calculate-button" type="submit" disabled={loading}>{loading ? 'Calculando...' : 'Calcular distribución'} <span>→</span></button>
-      {error && <p className="error-message">{error}</p>}
-    </form>
-    {result && <div className="result-card"><div className="result-heading"><div><p className="eyebrow accent">TU DISTRIBUCIÓN</p><h2>{result.method_name}</h2></div><div className="ready-amount"><small>LISTO PARA GASTAR</small><strong>${result.ready_to_spend.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong></div></div><div className="category-grid">{categories.map(([key, label, color]) => <div className="category" key={key}><div className="category-label"><span className="category-dot" style={{ background: color }} />{label}</div><strong>${result[key].toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong></div>)}</div></div>}
+    <div className="page-heading">
+      <div><p className="eyebrow accent">HISTORIAL FINANCIERO</p><h1>Tus períodos,<br /><em>en perspectiva.</em></h1><p className="page-intro">Consulta los ciclos registrados y revisa el detalle de tu período actual.</p></div>
+      <button className="primary-button compact-button" type="button" onClick={onOpenPeriod}>Abrir período <span>→</span></button>
+    </div>
+    {error && <p className="error-message">{error}</p>}
+    {!periods.length && !error && <div className="empty-period"><span className="empty-period-mark">01</span><div><h2>Aún no hay períodos</h2><p>Abre tu primer período para comenzar a organizar tus ingresos y gastos.</p><button className="secondary-button" type="button" onClick={onOpenPeriod}>Abrir período</button></div></div>}
+    {periods.length > 0 && <div className="period-history-grid">{periods.map((period) => <article className="period-history-card" key={period.id}><div className="period-history-card__top"><div><p className="eyebrow accent">{period.month}/{period.year}</p><h2>{period.start_date} — {period.end_date}</h2></div><div className="period-history-card__actions"><span className={period.is_closed ? 'workspace-status closed' : 'workspace-status'}>{period.is_closed ? 'Cerrado' : 'Abierto'}</span>{!period.is_closed && <button className="secondary-button close-period-button" type="button" onClick={() => handleClose(period.id)}>Cerrar período</button>}</div></div><div className="period-history-card__details"><div><small>Ingreso</small><strong>{period.has_summary ? formatMoney(period.total_income, period.currency_code) : 'Sin configurar'}</strong></div><div><small>Gastos fijos</small><strong>{period.has_summary ? formatMoney(period.total_fixed_expenses, period.currency_code) : '—'}</strong></div><div><small>Proporción fija</small><strong>{period.has_summary ? `${period.fixed_expenses_percent.toFixed(2)}%` : '—'}</strong></div></div></article>)}</div>}
   </section>
 }

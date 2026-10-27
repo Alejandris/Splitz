@@ -7,3 +7,8 @@ frontend/.env
 !.env.staging.example
 !.env.production.example
 secrets/
+squema/
+
+# Graphify memory: keep the portable graph and report, not generated/cache output.
+graphify-out/cache/
+graphify-out/graph.html

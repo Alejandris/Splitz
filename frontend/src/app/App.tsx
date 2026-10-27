@@ -3,9 +3,10 @@ import { AuthProvider, useAuth } from '../features/auth/AuthProvider'
 import { AuthPage } from '../pages/auth/AuthPage'
 import { BudgetPage } from '../pages/budget/BudgetPage'
 import { DashboardPage } from '../pages/dashboard/DashboardPage'
+import { PeriodsPage } from '../pages/periods/PeriodsPage'
 import { AppShell } from './layout/AppShell'
 
-export type AppRoute = 'dashboard' | 'budget'
+export type AppRoute = 'dashboard' | 'budget' | 'periods'
 
 export function App() {
   return <AuthProvider><AuthenticatedApp /></AuthProvider>
@@ -20,7 +21,7 @@ function AuthenticatedApp() {
 
   return (
     <AppShell activeRoute={route} onNavigate={setRoute}>
-      {route === 'dashboard' ? <DashboardPage onStart={() => setRoute('budget')} /> : <BudgetPage />}
+      {route === 'dashboard' ? <DashboardPage onStart={() => setRoute('periods')} /> : route === 'budget' ? <BudgetPage onOpenPeriod={() => setRoute('periods')} /> : <PeriodsPage />}
     </AppShell>
   )
 }
