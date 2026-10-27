@@ -39,12 +39,31 @@ func NewRouter(options ...RouterOption) *chi.Mux {
 	}
 
 	userService := service.NewUserService(config.db)
+	periodService := service.NewPeriodService(config.db)
+	periodHandler := handlers.NewPeriodHandler(userService, periodService)
+	categoryService := service.NewCategoryService(config.db)
+	categoryHandler := handlers.NewCategoryHandler(userService, categoryService)
+	methodService := service.NewMethodService(config.db)
+	methodHandler := handlers.NewMethodHandler(userService, methodService)
 	r.Group(func(protected chi.Router) {
 		protected.Use(auth.RequireFirebaseUser(config.firebaseAuth))
 		protected.Get("/api/v1/auth/me", handlers.Me(userService))
 		protected.Post("/api/v1/salary", handlers.AddSalary)
 		protected.Post("/api/v1/budget/calculate", handlers.CalculateBudget)
 		protected.Post("/api/v1/budget/custom", handlers.CalculateCustomBudget)
+		protected.Post("/api/v1/periods", periodHandler.CreateOrGetPeriod)
+		protected.Get("/api/v1/periods/{periodID}", periodHandler.GetPeriod)
+		protected.Post("/api/v1/periods/{periodID}/financial-summary", periodHandler.SaveFinancialSummary)
+		protected.Post("/api/v1/periods/{periodID}/financial-summary/preview", periodHandler.PreviewFinancialSummary)
+		protected.Post("/api/v1/fixed-expenses", periodHandler.CreateFixedExpense)
+		protected.Get("/api/v1/fixed-expenses", periodHandler.ListFixedExpenses)
+		protected.Get("/api/v1/fixed-expenses/history", periodHandler.ListHistoricalFixedExpenses)
+		protected.Patch("/api/v1/fixed-expenses/{expenseID}", periodHandler.UpdateFixedExpense)
+		protected.Get("/api/v1/categories", categoryHandler.List)
+		protected.Post("/api/v1/categories", categoryHandler.Create)
+		protected.Patch("/api/v1/categories/{categoryID}", categoryHandler.Update)
+		protected.Get("/api/v1/methods", methodHandler.List)
+		protected.Post("/api/v1/methods", methodHandler.Create)
 	})
 	return r
 }

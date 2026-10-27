@@ -24,6 +24,9 @@ export function AppShell({ activeRoute, onNavigate, children }: AppShellProps) {
           <button className={`nav-item ${activeRoute === 'budget' ? 'active' : ''}`} onClick={() => onNavigate('budget')}>
             <span>◈</span> Presupuesto
           </button>
+          <button className={`nav-item ${activeRoute === 'periods' ? 'active' : ''}`} onClick={() => onNavigate('periods')}>
+            <span>◷</span> Períodos
+          </button>
         </nav>
         <div className="sidebar-footer"><span className="status-dot" /> API conectada</div>
       </aside>
