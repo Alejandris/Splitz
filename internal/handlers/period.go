@@ -40,11 +40,28 @@ func (handler *PeriodHandler) CreateOrGetPeriod(w http.ResponseWriter, r *http.R
 		return
 	}
 	period, err := handler.periods.CreateOrGetPeriod(r.Context(), user.ID, request)
+	if errors.Is(err, service.ErrPeriodAlreadyExists) {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, period)
+}
+
+func (handler *PeriodHandler) ListPeriods(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.currentUser(w, r)
+	if !ok {
+		return
+	}
+	periods, err := handler.periods.ListPeriods(r.Context(), user.ID)
+	if err != nil {
+		http.Error(w, "could not load periods", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, periods)
 }
 
 func (handler *PeriodHandler) GetPeriod(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +81,32 @@ func (handler *PeriodHandler) GetPeriod(w http.ResponseWriter, r *http.Request) 
 	}
 	if err != nil {
 		http.Error(w, "could not load period", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, period)
+}
+
+func (handler *PeriodHandler) ClosePeriod(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.currentUser(w, r)
+	if !ok {
+		return
+	}
+	periodID, err := uuid.Parse(chi.URLParam(r, "periodID"))
+	if err != nil {
+		http.Error(w, "invalid period id", http.StatusBadRequest)
+		return
+	}
+	period, err := handler.periods.ClosePeriod(r.Context(), user.ID, periodID)
+	if errors.Is(err, service.ErrPeriodNotFound) {
+		http.Error(w, "period not found", http.StatusNotFound)
+		return
+	}
+	if errors.Is(err, service.ErrPeriodClosed) {
+		http.Error(w, "period is already closed", http.StatusConflict)
+		return
+	}
+	if err != nil {
+		http.Error(w, "could not close period", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, period)

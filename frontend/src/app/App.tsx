@@ -21,7 +21,7 @@ function AuthenticatedApp() {
 
   return (
     <AppShell activeRoute={route} onNavigate={setRoute}>
-      {route === 'dashboard' ? <DashboardPage onStart={() => setRoute('budget')} /> : route === 'budget' ? <BudgetPage /> : <PeriodsPage />}
+      {route === 'dashboard' ? <DashboardPage onStart={() => setRoute('periods')} /> : route === 'budget' ? <BudgetPage onOpenPeriod={() => setRoute('periods')} /> : <PeriodsPage />}
     </AppShell>
   )
 }

@@ -8,7 +8,7 @@ export function DashboardPage({ onStart }: DashboardPageProps) {
           <p className="eyebrow accent">BUENAS, ALEJANDRO</p>
           <h1>Tu dinero,<br /><em>dividido con intención.</em></h1>
           <p className="hero-copy">Construye claridad sobre tus ingresos y convierte tus metas en hábitos.</p>
-          <button className="primary-button" onClick={onStart}>Crear mi presupuesto <span>→</span></button>
+          <button className="primary-button" onClick={onStart}>Ir a períodos <span>→</span></button>
         </div>
         <div className="hero-orbit" aria-hidden="true"><div className="orbit-ring ring-one" /><div className="orbit-ring ring-two" /><div className="orbit-core">$</div></div>
       </div>

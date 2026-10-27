@@ -17,6 +17,7 @@ import (
 
 var ErrPeriodNotFound = errors.New("period not found")
 var ErrPeriodClosed = errors.New("period is closed")
+var ErrPeriodAlreadyExists = errors.New("a period already exists for this month and year")
 
 type PeriodService struct {
 	db *pgxpool.Pool
@@ -78,10 +79,13 @@ func (service *PeriodService) CreateOrGetPeriod(ctx context.Context, userID uuid
 	err = tx.QueryRow(ctx, `
 		INSERT INTO periods (user_id, year, month, start_date, end_date, currency_code)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (user_id, year, month) DO UPDATE SET user_id = EXCLUDED.user_id
+		ON CONFLICT (user_id, year, month) DO NOTHING
 		RETURNING id, year, month, start_date, end_date, currency_code, is_closed, created_at`,
 		userID, request.Year, request.Month, startDate, endDate, request.CurrencyCode,
 	).Scan(&period.ID, &period.Year, &period.Month, &startDateValue, &endDateValue, &period.CurrencyCode, &period.IsClosed, &period.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.Period{}, ErrPeriodAlreadyExists
+	}
 	if err != nil {
 		return models.Period{}, fmt.Errorf("create or get period: %w", err)
 	}
@@ -91,6 +95,45 @@ func (service *PeriodService) CreateOrGetPeriod(ctx context.Context, userID uuid
 		return models.Period{}, fmt.Errorf("commit period: %w", err)
 	}
 	return period, nil
+}
+
+func (service *PeriodService) ListPeriods(ctx context.Context, userID uuid.UUID) ([]models.PeriodOverview, error) {
+	rows, err := service.db.Query(ctx, `
+		SELECT p.id, p.year, p.month, p.start_date, p.end_date, p.currency_code,
+			p.is_closed, p.created_at,
+			COALESCE(s.total_income, 0), COALESCE(s.total_fixed_expenses, 0),
+			COALESCE(s.fixed_expenses_pct, 0), s.period_id IS NOT NULL
+		FROM periods p
+		LEFT JOIN financial_summaries s ON s.period_id = p.id
+		WHERE p.user_id = $1
+		ORDER BY p.start_date DESC, p.created_at DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list periods: %w", err)
+	}
+	defer rows.Close()
+	result := make([]models.PeriodOverview, 0)
+	for rows.Next() {
+		var item models.PeriodOverview
+		var startDate, endDate time.Time
+		if err := rows.Scan(
+			&item.ID, &item.Year, &item.Month, &startDate, &endDate,
+			&item.CurrencyCode, &item.IsClosed, &item.CreatedAt,
+			&item.TotalIncome, &item.TotalFixedExpenses,
+			&item.FixedExpensesPercent, &item.HasSummary,
+		); err != nil {
+			return nil, fmt.Errorf("scan period: %w", err)
+		}
+		item.StartDate = startDate.Format("2006-01-02")
+		item.EndDate = endDate.Format("2006-01-02")
+		item.TotalIncome = money.Round(item.TotalIncome)
+		item.TotalFixedExpenses = money.Round(item.TotalFixedExpenses)
+		item.FixedExpensesPercent = money.Round(item.FixedExpensesPercent)
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate periods: %w", err)
+	}
+	return result, nil
 }
 
 func (service *PeriodService) GetPeriod(ctx context.Context, userID, periodID uuid.UUID) (models.Period, error) {
@@ -107,6 +150,37 @@ func (service *PeriodService) GetPeriod(ctx context.Context, userID, periodID uu
 	}
 	if err != nil {
 		return models.Period{}, fmt.Errorf("get period: %w", err)
+	}
+	period.StartDate = startDate.Format("2006-01-02")
+	period.EndDate = endDate.Format("2006-01-02")
+	return period, nil
+}
+
+func (service *PeriodService) ClosePeriod(ctx context.Context, userID, periodID uuid.UUID) (models.Period, error) {
+	var period models.Period
+	var startDate, endDate time.Time
+	err := service.db.QueryRow(ctx, `
+		UPDATE periods
+		SET is_closed = TRUE
+		WHERE id = $1 AND user_id = $2 AND is_closed = FALSE
+		RETURNING id, year, month, start_date, end_date, currency_code, is_closed, created_at`,
+		periodID, userID,
+	).Scan(&period.ID, &period.Year, &period.Month, &startDate, &endDate, &period.CurrencyCode, &period.IsClosed, &period.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var exists bool
+		if err := service.db.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM periods WHERE id = $1 AND user_id = $2)`,
+			periodID, userID,
+		).Scan(&exists); err != nil {
+			return models.Period{}, fmt.Errorf("check period before closing: %w", err)
+		}
+		if !exists {
+			return models.Period{}, ErrPeriodNotFound
+		}
+		return models.Period{}, ErrPeriodClosed
+	}
+	if err != nil {
+		return models.Period{}, fmt.Errorf("close period: %w", err)
 	}
 	period.StartDate = startDate.Format("2006-01-02")
 	period.EndDate = endDate.Format("2006-01-02")

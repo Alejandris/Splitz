@@ -1,5 +1,5 @@
 import { get, patch, post } from '../../shared/api/httpClient'
-import type { Category, DraftFixedExpense, FinancialSummary, FixedExpense, HistoricalFixedExpense, Method, Period } from './period.types'
+import type { Category, DraftFixedExpense, FinancialSummary, FixedExpense, HistoricalFixedExpense, Method, Period, PeriodOverview } from './period.types'
 
 export function listCategories() {
   return get<Category[]>('/api/v1/categories')
@@ -11,6 +11,14 @@ export function createCategory(name: string, type: Category['type']) {
 
 export function createPeriod(year: number, month: number, start_date: string, end_date: string, currency_code: string) {
   return post<{ year: number; month: number; start_date: string; end_date: string; currency_code: string }, Period>('/api/v1/periods', { year, month, start_date, end_date, currency_code })
+}
+
+export function listPeriods() {
+  return get<PeriodOverview[]>('/api/v1/periods')
+}
+
+export function closePeriod(periodId: string) {
+  return patch<Record<string, never>, Period>(`/api/v1/periods/${periodId}/close`, {})
 }
 
 export function createFixedExpense(category_id: string, name: string, expected_amount: number) {

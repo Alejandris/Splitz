@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createCategory, createPeriod, listCategories, listFixedExpenses, listHistoricalFixedExpenses, listMethods, previewFinancialSummary, saveFinancialSummary } from '../../features/periods/period.api'
+import { closePeriod, createCategory, createPeriod, listCategories, listFixedExpenses, listHistoricalFixedExpenses, listMethods, previewFinancialSummary, saveFinancialSummary } from '../../features/periods/period.api'
 import type { Category, DraftFixedExpense, FinancialSummary, FixedExpense, HistoricalFixedExpense, Method, Period } from '../../features/periods/period.types'
 
 function CategoryIcon({ type }: { type: Category['type'] }) {
@@ -116,6 +116,17 @@ export function PeriodsPage() {
     }
   }
 
+  async function handleClosePeriod() {
+    if (!period || period.is_closed) return
+    if (!window.confirm('¿Quieres cerrar este período? Después no podrás modificarlo.')) return
+    setError('')
+    try {
+      setPeriod(await closePeriod(period.id))
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo cerrar el período')
+    }
+  }
+
   async function handleCategory(event: React.FormEvent) {
     event.preventDefault()
     setError('')
@@ -168,11 +179,11 @@ export function PeriodsPage() {
 
     <form className="period-start" onSubmit={handlePeriod}>
       <div><label className="field-label" htmlFor="period-month">Período que quieres organizar</label><p className="field-hint">Todo se mantiene como borrador hasta confirmar el guardado definitivo.</p></div>
-      <div className="period-selects"><label className="period-field" htmlFor="period-month">Mes<select id="period-month" value={month} onChange={(event) => setMonth(event.target.value)}><option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select></label><label className="period-field" htmlFor="period-year">Año<input id="period-year" type="number" min="2000" max="9999" value={year} onChange={(event) => setYear(event.target.value)} required /></label><label className="date-field">Inicio<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></label><label className="date-field">Fin<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></label><label className="period-field" htmlFor="period-currency">Moneda<select id="period-currency" value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="MXN">MXN · Peso mexicano</option><option value="COP">COP · Peso colombiano</option><option value="USD">USD · Dólar</option><option value="EUR">EUR · Euro</option></select></label><button className="primary-button compact-button" type="submit">{period ? 'Actualizar período' : 'Abrir período'} <span>→</span></button></div>
+      <div className="period-selects"><label className="period-field" htmlFor="period-month">Mes<select id="period-month" value={month} onChange={(event) => setMonth(event.target.value)}><option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select></label><label className="period-field" htmlFor="period-year">Año<input id="period-year" type="number" min="2000" max="9999" value={year} onChange={(event) => setYear(event.target.value)} required /></label><label className="date-field">Inicio<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></label><label className="date-field">Fin<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></label><label className="period-field" htmlFor="period-currency">Moneda<select id="period-currency" value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="MXN">MXN · Peso mexicano</option><option value="COP">COP · Peso colombiano</option><option value="USD">USD · Dólar</option><option value="EUR">EUR · Euro</option></select></label><div className="period-actions"><button className="primary-button compact-button" type="submit" disabled={Boolean(period?.is_closed)}>{period ? 'Actualizar período' : 'Abrir período'} <span>→</span></button></div></div>
     </form>
 
-    {period && <form className="period-workspace" onSubmit={handleSummary}>
-      <div className="workspace-heading"><div><p className="eyebrow accent">PASO 02 · INGRESO Y COMPROMISOS</p><h2>{period.month}/{period.year}: construyamos tu base</h2></div><span className="workspace-status">Período abierto</span></div>
+    {period && <form className={`period-workspace ${period.is_closed ? 'is-closed' : ''}`} onSubmit={handleSummary}>
+      <div className="workspace-heading"><div><p className="eyebrow accent">PASO 02 · INGRESO Y COMPROMISOS</p><h2>{period.month}/{period.year}: construyamos tu base</h2></div><div className="workspace-actions"><span className={`workspace-status ${period.is_closed ? 'closed' : ''}`}>{period.is_closed ? 'Período cerrado' : 'Período abierto'}</span>{!period.is_closed && <button className="secondary-button close-period-button" type="button" onClick={handleClosePeriod}>Cerrar período</button>}</div></div>
       <div className="income-row"><label className="field-label" htmlFor="period-income">Ingreso neto del mes</label><div className="money-input"><span>$</span><input id="period-income" type="text" inputMode="decimal" value={income} onChange={(event) => setIncome(formatInputAmount(event.target.value))} placeholder="0.00" required /><span className="currency">{currency}</span></div></div>
       <div className="goal-options"><label><input type="checkbox" checked={hasSavingsGoal} onChange={(event) => setHasSavingsGoal(event.target.checked)} /> Tengo una meta de ahorro</label><label><input type="checkbox" checked={hasDebts} onChange={(event) => setHasDebts(event.target.checked)} /> Tengo deudas activas</label></div>
       <div className="section-heading"><div><p className="eyebrow accent">GASTOS FIJOS</p><h3>Lo que ya sabes que vas a pagar</h3></div><button className="secondary-button" type="button" onClick={() => setShowExpenseModal(true)}>Agregar gasto <span>+</span></button></div>

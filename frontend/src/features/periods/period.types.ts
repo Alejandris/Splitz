@@ -9,6 +9,13 @@ export type Period = {
   created_at: string
 }
 
+export type PeriodOverview = Period & {
+  total_income: number
+  total_fixed_expenses: number
+  fixed_expenses_percent: number
+  has_summary: boolean
+}
+
 export type FixedExpense = {
   id?: string
   category_id: string

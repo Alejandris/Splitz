@@ -17,6 +17,14 @@ type Period struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type PeriodOverview struct {
+	Period
+	TotalIncome          float64 `json:"total_income"`
+	TotalFixedExpenses   float64 `json:"total_fixed_expenses"`
+	FixedExpensesPercent float64 `json:"fixed_expenses_percent"`
+	HasSummary           bool    `json:"has_summary"`
+}
+
 type CreatePeriodRequest struct {
 	Year         int    `json:"year"`
 	Month        int    `json:"month"`
