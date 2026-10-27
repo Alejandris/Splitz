@@ -28,3 +28,10 @@ export function post<TRequest, TResponse>(path: string, body: TRequest): Promise
     body: JSON.stringify(body),
   })
 }
+
+export function patch<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
+  return request<TResponse>(path, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}

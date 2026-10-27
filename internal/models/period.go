@@ -82,10 +82,18 @@ type DistributionAllocation struct {
 }
 
 type CreateFinancialSummaryRequest struct {
-	TotalIncome    float64   `json:"total_income"`
-	HasSavingsGoal bool      `json:"has_savings_goal"`
-	HasDebts       bool      `json:"has_debts"`
-	MethodID       uuid.UUID `json:"method_id"`
+	TotalIncome    float64             `json:"total_income"`
+	HasSavingsGoal bool                `json:"has_savings_goal"`
+	HasDebts       bool                `json:"has_debts"`
+	MethodID       uuid.UUID           `json:"method_id"`
+	FixedExpenses  []DraftFixedExpense `json:"fixed_expenses"`
 }
 
 type SummaryPreviewRequest = CreateFinancialSummaryRequest
+
+type DraftFixedExpense struct {
+	ID             *uuid.UUID `json:"id,omitempty"`
+	CategoryID     uuid.UUID  `json:"category_id"`
+	Name           string     `json:"name"`
+	ExpectedAmount float64    `json:"expected_amount"`
+}

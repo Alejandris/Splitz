@@ -74,28 +74,19 @@ func (service *PeriodService) CreateOrGetPeriod(ctx context.Context, userID uuid
 	defer tx.Rollback(ctx)
 
 	var period models.Period
+	var startDateValue, endDateValue time.Time
 	err = tx.QueryRow(ctx, `
 		INSERT INTO periods (user_id, year, month, start_date, end_date, currency_code)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (user_id, year, month) DO UPDATE SET user_id = EXCLUDED.user_id
 		RETURNING id, year, month, start_date, end_date, currency_code, is_closed, created_at`,
 		userID, request.Year, request.Month, startDate, endDate, request.CurrencyCode,
-	).Scan(&period.ID, &period.Year, &period.Month, &period.StartDate, &period.EndDate, &period.CurrencyCode, &period.IsClosed, &period.CreatedAt)
+	).Scan(&period.ID, &period.Year, &period.Month, &startDateValue, &endDateValue, &period.CurrencyCode, &period.IsClosed, &period.CreatedAt)
 	if err != nil {
 		return models.Period{}, fmt.Errorf("create or get period: %w", err)
 	}
-	if !period.IsClosed {
-		_, err = tx.Exec(ctx, `
-			INSERT INTO period_fixed_expenses
-				(period_id, fixed_expense_id, expected_amount, paid_exact_amount, actual_paid_amount, is_paid)
-			SELECT $1, id, expected_amount, FALSE, expected_amount, FALSE
-			FROM fixed_expenses
-			WHERE user_id = $2 AND is_active = TRUE
-			ON CONFLICT (period_id, fixed_expense_id) DO NOTHING`, period.ID, userID)
-		if err != nil {
-			return models.Period{}, fmt.Errorf("snapshot fixed expenses: %w", err)
-		}
-	}
+	period.StartDate = startDateValue.Format("2006-01-02")
+	period.EndDate = endDateValue.Format("2006-01-02")
 	if err := tx.Commit(ctx); err != nil {
 		return models.Period{}, fmt.Errorf("commit period: %w", err)
 	}
@@ -104,18 +95,21 @@ func (service *PeriodService) CreateOrGetPeriod(ctx context.Context, userID uuid
 
 func (service *PeriodService) GetPeriod(ctx context.Context, userID, periodID uuid.UUID) (models.Period, error) {
 	var period models.Period
+	var startDate, endDate time.Time
 	err := service.db.QueryRow(ctx, `
 		SELECT id, year, month, start_date, end_date, currency_code, is_closed, created_at
 		FROM periods
 		WHERE id = $1 AND user_id = $2`,
 		periodID, userID,
-	).Scan(&period.ID, &period.Year, &period.Month, &period.StartDate, &period.EndDate, &period.CurrencyCode, &period.IsClosed, &period.CreatedAt)
+	).Scan(&period.ID, &period.Year, &period.Month, &startDate, &endDate, &period.CurrencyCode, &period.IsClosed, &period.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Period{}, ErrPeriodNotFound
 	}
 	if err != nil {
 		return models.Period{}, fmt.Errorf("get period: %w", err)
 	}
+	period.StartDate = startDate.Format("2006-01-02")
+	period.EndDate = endDate.Format("2006-01-02")
 	return period, nil
 }
 
@@ -235,6 +229,79 @@ func (service *PeriodService) UpdateFixedExpense(ctx context.Context, userID, ex
 	return expense, nil
 }
 
+func syncPeriodFixedExpenses(ctx context.Context, tx pgx.Tx, userID, periodID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO period_fixed_expenses
+			(period_id, fixed_expense_id, expected_amount, paid_exact_amount, actual_paid_amount, is_paid)
+		SELECT $1, expense.id, expense.expected_amount, FALSE, expense.expected_amount, FALSE
+		FROM fixed_expenses expense
+		WHERE expense.user_id = $2 AND expense.is_active = TRUE
+		ON CONFLICT (period_id, fixed_expense_id) DO NOTHING`,
+		periodID, userID)
+	if err != nil {
+		return fmt.Errorf("sync period fixed expenses: %w", err)
+	}
+	return nil
+}
+
+func calculateDraftFixedExpenses(expenses []models.DraftFixedExpense) (float64, error) {
+	total := 0.0
+	for _, expense := range expenses {
+		if strings.TrimSpace(expense.Name) == "" || expense.CategoryID == uuid.Nil {
+			continue
+		}
+		if expense.ExpectedAmount < 0 {
+			return 0, errors.New("fixed expense amounts must be greater than or equal to 0")
+		}
+		total += money.Round(expense.ExpectedAmount)
+	}
+	return money.Round(total), nil
+}
+
+func persistDraftFixedExpenses(ctx context.Context, tx pgx.Tx, userID, periodID uuid.UUID, expenses []models.DraftFixedExpense) error {
+	if _, err := calculateDraftFixedExpenses(expenses); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE fixed_expenses SET is_active = FALSE WHERE user_id = $1`, userID); err != nil {
+		return fmt.Errorf("deactivate removed fixed expenses: %w", err)
+	}
+	for _, draft := range expenses {
+		if strings.TrimSpace(draft.Name) == "" || draft.CategoryID == uuid.Nil {
+			continue
+		}
+		if draft.ID == nil || *draft.ID == uuid.Nil {
+			tag, err := tx.Exec(ctx, `
+					INSERT INTO fixed_expenses (user_id, category_id, name, expected_amount)
+					SELECT $1, id, $3, $4 FROM categories
+					WHERE id = $2 AND is_active = TRUE
+						AND (created_by_user_id IS NULL OR created_by_user_id = $1)`,
+				userID, draft.CategoryID, strings.TrimSpace(draft.Name), money.Round(draft.ExpectedAmount))
+			if err != nil {
+				return fmt.Errorf("create definitive fixed expense: %w", err)
+			}
+			if tag.RowsAffected() == 0 {
+				return errors.New("category not found or not available")
+			}
+			continue
+		}
+		tag, err := tx.Exec(ctx, `
+				UPDATE fixed_expenses expense
+				SET category_id = category.id, name = $3, expected_amount = $4, is_active = TRUE
+				FROM categories category
+				WHERE expense.id = $1 AND expense.user_id = $2
+					AND category.id = $5 AND category.is_active = TRUE
+					AND (category.created_by_user_id IS NULL OR category.created_by_user_id = $2)`,
+			*draft.ID, userID, strings.TrimSpace(draft.Name), money.Round(draft.ExpectedAmount), draft.CategoryID)
+		if err != nil || tag.RowsAffected() == 0 {
+			return fmt.Errorf("update definitive fixed expense: %w", err)
+		}
+	}
+	if err := syncPeriodFixedExpenses(ctx, tx, userID, periodID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (service *PeriodService) UpsertFinancialSummary(ctx context.Context, userID, periodID uuid.UUID, request models.CreateFinancialSummaryRequest) (models.FinancialSummary, error) {
 	if request.TotalIncome <= 0 {
 		return models.FinancialSummary{}, errors.New("total_income must be greater than 0")
@@ -270,16 +337,15 @@ func (service *PeriodService) UpsertFinancialSummary(ctx context.Context, userID
 		return models.FinancialSummary{}, errors.New("method not found or not available")
 	}
 
-	var totalFixed float64
-	if err := tx.QueryRow(ctx, `
-		SELECT COALESCE(SUM(expected_amount), 0)
-		FROM period_fixed_expenses
-		WHERE period_id = $1`, periodID).Scan(&totalFixed); err != nil {
-		return models.FinancialSummary{}, fmt.Errorf("calculate fixed expenses: %w", err)
+	if err := persistDraftFixedExpenses(ctx, tx, userID, periodID, request.FixedExpenses); err != nil {
+		return models.FinancialSummary{}, err
+	}
+	totalFixed, err := calculateDraftFixedExpenses(request.FixedExpenses)
+	if err != nil {
+		return models.FinancialSummary{}, err
 	}
 
 	totalIncome := money.Round(request.TotalIncome)
-	totalFixed = money.Round(totalFixed)
 	percentage := money.Round((totalFixed / totalIncome) * 100)
 	summary := models.FinancialSummary{
 		PeriodID:             periodID,
@@ -342,12 +408,11 @@ func (service *PeriodService) PreviewFinancialSummary(ctx context.Context, userI
 	if closed {
 		return models.FinancialSummary{}, ErrPeriodClosed
 	}
-	var totalFixed float64
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(SUM(expected_amount), 0) FROM period_fixed_expenses WHERE period_id = $1`, periodID).Scan(&totalFixed); err != nil {
-		return models.FinancialSummary{}, fmt.Errorf("calculate preview fixed expenses: %w", err)
+	totalFixed, err := calculateDraftFixedExpenses(request.FixedExpenses)
+	if err != nil {
+		return models.FinancialSummary{}, err
 	}
 	totalIncome := money.Round(request.TotalIncome)
-	totalFixed = money.Round(totalFixed)
 	percentage := money.Round((totalFixed / totalIncome) * 100)
 	summary := models.FinancialSummary{
 		PeriodID: periodID, TotalIncome: totalIncome, TotalFixedExpenses: totalFixed,
@@ -393,8 +458,6 @@ func (service *PeriodService) populateDistribution(ctx context.Context, tx pgx.T
 
 	type allocation struct{ item models.DistributionAllocation }
 	allocations := make([]allocation, 0)
-	usedTotal := 0.0
-	unusedTotal := 0.0
 	configuredTotal := 0.0
 	for rows.Next() {
 		var item models.DistributionAllocation
@@ -403,11 +466,8 @@ func (service *PeriodService) populateDistribution(ctx context.Context, tx pgx.T
 		}
 		item.ConfiguredPercent = money.Round(item.ConfiguredPercent)
 		configuredTotal += item.ConfiguredPercent
-		if item.CategoryUsed {
-			usedTotal += item.ConfiguredPercent
-		} else {
-			unusedTotal += item.ConfiguredPercent
-			summary.Warnings = append(summary.Warnings, fmt.Sprintf("La categoría %s no tiene compromisos registrados; su porcentaje se redistribuye entre categorías usadas.", item.CategoryName))
+		if !item.CategoryUsed {
+			summary.Warnings = append(summary.Warnings, fmt.Sprintf("La categoría %s no tiene compromisos registrados; se conserva su porcentaje configurado.", item.CategoryName))
 		}
 		allocations = append(allocations, allocation{item: item})
 	}
@@ -417,10 +477,6 @@ func (service *PeriodService) populateDistribution(ctx context.Context, tx pgx.T
 	if money.Round(configuredTotal) != 100 {
 		summary.Warnings = append(summary.Warnings, "El método no suma exactamente 100%; revisa sus asignaciones antes de guardarlo.")
 	}
-	if usedTotal == 0 && unusedTotal > 0 {
-		summary.Warnings = append(summary.Warnings, "El método no tiene categorías usadas en este período; se muestran sus porcentajes sin redistribución.")
-	}
-
 	var activeDebts int
 	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM debt_accounts WHERE user_id = $1 AND is_paid_off = FALSE`, userID).Scan(&activeDebts); err != nil {
 		return fmt.Errorf("check active debts: %w", err)
@@ -432,31 +488,35 @@ func (service *PeriodService) populateDistribution(ctx context.Context, tx pgx.T
 			break
 		}
 	}
-	if request.HasDebts && activeDebts > 0 {
-		if hasDebtAllocation {
-			summary.Warnings = append(summary.Warnings, "La asignación de deuda se conserva como prioridad porque tienes deudas activas.")
-		} else {
-			summary.Warnings = append(summary.Warnings, "Tienes deudas activas, pero el método no incluye una categoría de deuda.")
-		}
+	if warning := debtPriorityWarning(request.HasDebts, activeDebts, hasDebtAllocation); warning != "" {
+		summary.Warnings = append(summary.Warnings, warning)
 	}
 	if request.HasSavingsGoal {
 		summary.Warnings = append(summary.Warnings, "La asignación de ahorro se conserva porque activaste una meta de ahorro.")
 	}
 	for _, current := range allocations {
-		item := current.item
-		if item.CategoryUsed && usedTotal > 0 {
-			item.EffectivePercent = money.Round(item.ConfiguredPercent + unusedTotal*(item.ConfiguredPercent/usedTotal))
-		} else if !item.CategoryUsed && usedTotal > 0 {
-			item.EffectivePercent = 0
-		} else {
-			item.EffectivePercent = item.ConfiguredPercent
-		}
-		if summary.HasDeficit {
-			item.Amount = 0
-		} else {
-			item.Amount = money.Round(summary.AvailableAmount * item.EffectivePercent / 100)
-		}
-		summary.Allocations = append(summary.Allocations, item)
+		summary.Allocations = append(summary.Allocations, calculateDistributionAllocation(
+			summary.AvailableAmount,
+			current.item,
+			summary.HasDeficit,
+		))
 	}
 	return nil
+}
+
+func debtPriorityWarning(debtsSelected bool, activeDebts int, methodHasDebtCategory bool) string {
+	if debtsSelected && activeDebts > 0 && methodHasDebtCategory {
+		return "La asignación de deuda se conserva como prioridad porque tienes deudas activas."
+	}
+	return ""
+}
+
+func calculateDistributionAllocation(available float64, item models.DistributionAllocation, deficit bool) models.DistributionAllocation {
+	item.EffectivePercent = money.Round(item.ConfiguredPercent)
+	if deficit {
+		item.Amount = 0
+		return item
+	}
+	item.Amount = money.Round(available * item.EffectivePercent / 100)
+	return item
 }

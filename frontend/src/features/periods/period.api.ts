@@ -1,5 +1,5 @@
-import { get, post } from '../../shared/api/httpClient'
-import type { Category, FinancialSummary, FixedExpense, HistoricalFixedExpense, Method, Period } from './period.types'
+import { get, patch, post } from '../../shared/api/httpClient'
+import type { Category, DraftFixedExpense, FinancialSummary, FixedExpense, HistoricalFixedExpense, Method, Period } from './period.types'
 
 export function listCategories() {
   return get<Category[]>('/api/v1/categories')
@@ -21,6 +21,20 @@ export function listFixedExpenses() {
   return get<FixedExpense[]>('/api/v1/fixed-expenses')
 }
 
+export function updateFixedExpense(expense: FixedExpense, is_active: boolean) {
+  return patch<{
+    category_id: string
+    name: string
+    expected_amount: number
+    is_active: boolean
+  }, FixedExpense>(`/api/v1/fixed-expenses/${expense.id}`, {
+    category_id: expense.category_id,
+    name: expense.name,
+    expected_amount: expense.expected_amount,
+    is_active,
+  })
+}
+
 export function listHistoricalFixedExpenses() {
   return get<HistoricalFixedExpense[]>('/api/v1/fixed-expenses/history')
 }
@@ -29,16 +43,16 @@ export function listMethods() {
   return get<Method[]>('/api/v1/methods')
 }
 
-export function saveFinancialSummary(periodId: string, total_income: number, has_savings_goal: boolean, has_debts: boolean, method_id: string) {
-  return post<{ total_income: number; has_savings_goal: boolean; has_debts: boolean; method_id: string }, FinancialSummary>(
+export function saveFinancialSummary(periodId: string, total_income: number, has_savings_goal: boolean, has_debts: boolean, method_id: string, fixed_expenses: DraftFixedExpense[]) {
+  return post<{ total_income: number; has_savings_goal: boolean; has_debts: boolean; method_id: string; fixed_expenses: DraftFixedExpense[] }, FinancialSummary>(
     `/api/v1/periods/${periodId}/financial-summary`,
-    { total_income, has_savings_goal, has_debts, method_id },
+    { total_income, has_savings_goal, has_debts, method_id, fixed_expenses },
   )
 }
 
-export function previewFinancialSummary(periodId: string, total_income: number, has_savings_goal: boolean, has_debts: boolean, method_id: string) {
-  return post<{ total_income: number; has_savings_goal: boolean; has_debts: boolean; method_id: string }, FinancialSummary>(
+export function previewFinancialSummary(periodId: string, total_income: number, has_savings_goal: boolean, has_debts: boolean, method_id: string, fixed_expenses: DraftFixedExpense[]) {
+  return post<{ total_income: number; has_savings_goal: boolean; has_debts: boolean; method_id: string; fixed_expenses: DraftFixedExpense[] }, FinancialSummary>(
     `/api/v1/periods/${periodId}/financial-summary/preview`,
-    { total_income, has_savings_goal, has_debts, method_id },
+    { total_income, has_savings_goal, has_debts, method_id, fixed_expenses },
   )
 }

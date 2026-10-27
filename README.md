@@ -156,7 +156,11 @@ Permite especificar porcentajes exactos para cada rubro. La suma de los porcenta
 
 Las operaciones financieras protegidas por Firebase incluyen:
 
-* `POST /api/v1/periods`: crea o recupera el período del usuario para un año y mes.
+* `POST /api/v1/periods`: crea o recupera el período del usuario. El cuerpo
+  acepta `year`, `month`, `start_date`, `end_date` (formato `YYYY-MM-DD`) y
+  `currency_code` (`MXN`, `COP`, `USD` o `EUR`). Las fechas son obligatorias
+  en conjunto; si ambas se omiten, el backend calcula el primer y último día
+  del mes. La respuesta incluye `start_date`, `end_date` y `currency_code`.
 * `GET /api/v1/periods/{periodID}`: consulta un período únicamente si pertenece al usuario autenticado.
 * `POST /api/v1/periods/{periodID}/financial-summary`: registra el ingreso y calcula el porcentaje de gastos fijos.
 * `POST /api/v1/fixed-expenses`: crea un gasto fijo del usuario.

@@ -2,17 +2,22 @@ export type Period = {
   id: string
   year: number
   month: number
+  start_date: string
+  end_date: string
+  currency_code: string
   is_closed: boolean
   created_at: string
 }
 
 export type FixedExpense = {
-  id: string
+  id?: string
   category_id: string
   name: string
   expected_amount: number
   is_active: boolean
 }
+
+export type DraftFixedExpense = Omit<FixedExpense, 'id' | 'is_active'> & { id?: string }
 
 export type HistoricalFixedExpense = {
   period_id: string
